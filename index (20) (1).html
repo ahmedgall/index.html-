@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calzy OS | Cloud Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        :root {
+            --p: #8b5cf6; --s: #10b981; --bg: #05070a; --card: #111827; --text: #f9fafb; --d: #ef4444; --w: #3b82f6; --cr: #f59e0b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 100px; overflow-x: hidden; }
+        
+        /* Auth & UI */
+        .auth-overlay { position: fixed; inset: 0; background: radial-gradient(circle at center, #1e1b4b 0%, var(--bg) 100%); z-index: 6000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; text-align: center; }
+        .auth-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); padding: 40px 20px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); width: 100%; max-width: 380px; }
+        
+        .btn-google { background: white; color: black; padding: 15px; border-radius: 18px; border: none; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 12px; margin: 25px auto 0; width: 100%; justify-content: center; transition: 0.3s; }
+        .loader { width: 48px; height: 48px; border: 5px solid #FFF; border-bottom-color: var(--p); border-radius: 50%; display: inline-block; animation: rotation 1s linear infinite; margin-bottom: 20px; }
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .container { max-width: 450px; margin: 0 auto; padding: 20px; }
+        .glass-card { background: var(--card); border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 20px; margin-bottom: 15px; position: relative; }
+        
+        /* Progress Circle */
+        .main-display { position: relative; width: 230px; height: 230px; margin: 0 auto 25px; display: flex; justify-content: center; align-items: center; }
+        svg { transform: rotate(-90deg); width: 230px; height: 230px; }
+        circle { fill: none; stroke-width: 12; stroke-linecap: round; }
+        .track { stroke: rgba(255,255,255,0.05); }
+        .progress { stroke: var(--p); stroke-dasharray: 628; stroke-dashoffset: 628; transition: 1.5s ease; filter: drop-shadow(0 0 12px var(--p)); }
+        .inner-content { position: absolute; text-align: center; }
+        .inner-content h2 { font-size: 45px; font-weight: 900; }
+
+        .macro-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .macro-box { text-align: center; background: rgba(255,255,255,0.03); padding: 15px 5px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05); }
+        .macro-box b { color: var(--s); font-size: 14px; }
+
+        .prog-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+        .prog-fill { height: 100%; width: 0%; transition: 0.5s ease; }
+        .btn-add { border: none; color: white; padding: 8px 15px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 12px; }
+
+        input, select { width: 100%; padding: 15px; background: #1f2937; border: 1px solid #374151; border-radius: 14px; color: white; margin-bottom: 12px; outline: none; }
+        .btn-p { width: 100%; padding: 16px; border-radius: 14px; border: none; font-weight: 900; background: var(--p); color: white; cursor: pointer; }
+
+        nav { position: fixed; bottom: 20px; left: 20px; right: 20px; background: rgba(17, 24, 39, 0.8); backdrop-filter: blur(15px); display: flex; justify-content: space-around; padding: 12px; border-radius: 25px; border: 1px solid rgba(255,255,255,0.1); z-index: 1000; }
+        .nav-item { color: #6b7280; font-size: 24px; cursor: pointer; padding: 10px; }
+        .nav-item.active { color: var(--p); background: rgba(139, 92, 246, 0.1); border-radius: 15px; }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: none; align-items: flex-end; }
+        .modal-inner { background: var(--card); width: 100%; border-radius: 30px 30px 0 0; padding: 25px; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .hidden { display: none !important; }
+        .user-name-style { font-weight: 900; color: var(--p); }
+    </style>
+</head>
+<body>
+
+<div id="authScreen" class="auth-overlay">
+    <div id="loadingUI"><span class="loader"></span><p>جاري مزامنة بياناتك...</p></div>
+    <div id="loginUI" class="auth-card hidden">
+        <h1 style="font-size: 35px; margin-bottom: 10px;">CALZY <span style="color:var(--p)">OS</span></h1>
+        <p style="color: #94a3b8;">سجل دخولك لحفظ بياناتك سحابياً ☁️</p>
+        <button class="btn-google" onclick="login()">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" width="20">
+            متابعة باستخدام جوجل
+        </button>
+    </div>
+</div>
+
+<div id="setupLayer" class="setup-overlay hidden auth-overlay">
+    <div class="auth-card">
+        <h2>تجهيز ملفك ⚡</h2>
+        <input type="text" id="setupName" placeholder="الاسم">
+        <select id="setupGoal">
+            <option value="cut">تنشيف 🔥</option>
+            <option value="maintain" selected>ثبات ⚖️</option>
+            <option value="bulk">تضخيم 💪</option>
+        </select>
+        <input type="number" id="setupW" placeholder="الوزن (كجم)">
+        <input type="number" id="setupH" placeholder="الطول (سم)">
+        <button class="btn-p" onclick="finishSetup()">ابدأ الآن</button>
+    </div>
+</div>
+
+<div class="container hidden" id="mainApp">
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 id="greetUser">مرحباً</h2>
+        <div style="display: flex; gap: 15px; align-items: center;">
+            <span id="syncStatus" style="font-size: 10px; color: #4b5563;">☁️ متصل</span>
+            <div onclick="resetSystem()" style="cursor:pointer; font-size: 20px;">⚙️</div>
+        </div>
+    </header>
+
+    <div id="home-page">
+        <div class="main-display">
+            <svg><circle class="track" cx="115" cy="115" r="100"></circle><circle id="progCircle" class="progress" cx="115" cy="115" r="100"></circle></svg>
+            <div class="inner-content"><p style="color:#94a3b8; font-size:14px">المتبقي</p><h2 id="calRem">0</h2><small id="calTotal"></small></div>
+        </div>
+
+        <div class="macro-row glass-card">
+            <div class="macro-box"><small>بروتين</small><br><b id="pVal">0</b></div>
+            <div class="macro-box"><small>كارب</small><br><b id="cbVal">0</b></div>
+            <div class="macro-box"><small>دهون</small><br><b id="fVal">0</b></div>
+        </div>
+
+        <div class="glass-card">
+            <div style="display:flex; justify-content:space-between; align-items:center">
+                <span>💧 الماء <small id="wTxt" style="color:var(--w)">0/3 L</small></span>
+                <button class="btn-add" style="background:var(--w)" onclick="addTrack('water', 0.25)">+ 0.25L</button>
+            </div>
+            <div class="prog-bg"><div id="wBar" class="prog-fill" style="background:var(--w)"></div></div>
+        </div>
+    </div>
+
+    <div id="services-page" class="hidden">
+        <h3>الخدمات 🛠️</h3>
+        <div class="glass-card" style="margin-top:20px">قريباً: جدول التمارين الذكي...</div>
+    </div>
+</div>
+
+<div id="addModal" class="modal"><div class="modal-inner">
+    <h3>إضافة وجبة</h3>
+    <input type="number" id="inC" placeholder="السعرات">
+    <div style="display: flex; gap: 8px;">
+        <input type="number" id="inP" placeholder="بروتين">
+        <input type="number" id="inCB" placeholder="كارب">
+        <input type="number" id="inF" placeholder="دهون">
+    </div>
+    <button class="btn-p" onclick="confirmAdd()">إضافة ✅</button>
+    <button onclick="closeAdd()" style="width:100%; margin-top:10px; background:none; border:none; color:#6b7280;">إلغاء</button>
+</div></div>
+
+<nav class="hidden" id="mainNav">
+    <div class="nav-item active" id="n-home" onclick="showPage('home')">🏠</div>
+    <div class="nav-item" onclick="openAdd()">➕</div>
+    <div class="nav-item" id="n-serv" onclick="showPage('services')">🛠️</div>
+</nav>
+
+<script>
+    // بياناتك الحقيقية من Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyDArzqtGOFzUWvlD9-cIVpNb1p0ribZYnw",
+        authDomain: "calzyos.firebaseapp.com",
+        projectId: "calzyos",
+        storageBucket: "calzyos.firebasestorage.app",
+        messagingSenderId: "949638052369",
+        appId: "1:949638052369:web:9c6ed74732100c0c460fb0",
+        measurementId: "G-G89B24T9CW"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const fdb = firebase.firestore();
+
+    let db = {
+        setup: false, name: "",
+        goals: {c:2000, p:150, cb:200, f:60},
+        current: {c:0, p:0, cb:0, f:0},
+        water: 0, date: new Date().toLocaleDateString()
+    };
+
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            document.getElementById('loadingUI').classList.remove('hidden');
+            document.getElementById('loginUI').classList.add('hidden');
+            await syncData(user.uid);
+        } else {
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('loadingUI').classList.add('hidden');
+            document.getElementById('loginUI').classList.remove('hidden');
+        }
+    });
+
+    async function login() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await auth.signInWithPopup(provider).catch(err => alert(err.message));
+    }
+
+    async function syncData(uid) {
+        try {
+            const doc = await fdb.collection("users").doc(uid).get();
+            if (doc.exists) {
+                db = doc.data();
+                if(db.date !== new Date().toLocaleDateString()) resetDailyStats();
+            } else if(!db.setup) {
+                document.getElementById('setupLayer').classList.remove('hidden');
+            }
+            startApp();
+        } catch (e) { startApp(); }
+    }
+
+    function startApp() {
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        document.getElementById('mainNav').classList.remove('hidden');
+        render();
+    }
+
+    async function save() {
+        localStorage.setItem('calzy_vPro', JSON.stringify(db));
+        if (auth.currentUser) {
+            document.getElementById('syncStatus').innerText = "⏳ جاري الحفظ...";
+            await fdb.collection("users").doc(auth.currentUser.uid).set(db);
+            document.getElementById('syncStatus').innerText = "☁️ تم الحفظ";
+        }
+    }
+
+    function finishSetup() {
+        const w = parseFloat(document.getElementById('setupW').value);
+        const goal = document.getElementById('setupGoal').value;
+        if(!w) return alert("أدخل الوزن");
+        let calories = (goal === 'cut') ? w * 24 : (goal === 'bulk' ? w * 35 : w * 30);
+        db.setup = true;
+        db.name = document.getElementById('setupName').value || "بطل";
+        db.goals = { c: Math.round(calories), p: Math.round(w * 2), cb: Math.round(w * 3), f: Math.round(w * 0.8) };
+        document.getElementById('setupLayer').classList.add('hidden');
+        save(); render();
+    }
+
+    function render() {
+        if(!db.setup) return;
+        document.getElementById('greetUser').innerHTML = `أهلاً، <span class="user-name-style">${db.name}</span>`;
+        const rem = Math.max(0, db.goals.c - db.current.c);
+        document.getElementById('calRem').innerText = rem;
+        document.getElementById('calTotal').innerText = `هدفك: ${db.goals.c}`;
+        document.getElementById('progCircle').style.strokeDashoffset = 628 - (Math.min(db.current.c / db.goals.c, 1) * 628);
+        document.getElementById('pVal').innerText = `${Math.round(db.current.p)}/${db.goals.p}g`;
+        document.getElementById('cbVal').innerText = `${Math.round(db.current.cb)}/${db.goals.cb}g`;
+        document.getElementById('fVal').innerText = `${Math.round(db.current.f)}/${db.goals.f}g`;
+        document.getElementById('wTxt').innerText = `${db.water.toFixed(2)} / 3 L`;
+        document.getElementById('wBar').style.width = Math.min((db.water/3)*100, 100) + "%";
+    }
+
+    function confirmAdd() {
+        db.current.c += parseFloat(document.getElementById('inC').value) || 0;
+        db.current.p += parseFloat(document.getElementById('inP').value) || 0;
+        db.current.cb += parseFloat(document.getElementById('inCB').value) || 0;
+        db.current.f += parseFloat(document.getElementById('inF').value) || 0;
+        save(); render(); closeAdd();
+    }
+
+    function addTrack(type, val) { db[type] += val; save(); render(); }
+    function showPage(p) {
+        document.getElementById('home-page').classList.toggle('hidden', p !== 'home');
+        document.getElementById('services-page').classList.toggle('hidden', p !== 'services');
+        document.getElementById('n-home').classList.toggle('active', p === 'home');
+        document.getElementById('n-serv').classList.toggle('active', p === 'services');
+    }
+    function openAdd() { document.getElementById('addModal').style.display = 'flex'; }
+    function closeAdd() { document.getElementById('addModal').style.display = 'none'; }
+    function resetDailyStats() { db.current = {c:0, p:0, cb:0, f:0}; db.water = 0; db.date = new Date().toLocaleDateString(); save(); }
+    function resetSystem() { if(confirm("تسجيل خروج؟")) auth.signOut().then(() => location.reload()); }
+</script>
+</body>
+</html>
