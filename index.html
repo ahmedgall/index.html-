@@ -70,6 +70,10 @@
         }
         @keyframes shine { to { background-position: 200% center; } }
     </style>
+
+
+
+
 </head>
 
 <body>
@@ -304,6 +308,58 @@
         if(saved) db = JSON.parse(saved);
         render();
     };
+
+    // دالة لطلب الإذن وإرسال إشعار تجريبي فوراً
+async function testNotification() {
+    // 1. طلب إذن الإشعارات من المستخدم
+    const permission = await Notification.requestPermission();
+    
+    if (permission === "granted") {
+        // 2. الوصول للـ Service Worker لإرسال الإشعار من خلاله
+        const registration = await navigator.serviceWorker.ready;
+        
+        // 3. إرسال الإشعار
+        registration.showNotification("Calzy OS | تجربة بنجاح 🔥", {
+            body: "أنا شغال دلوقتي! الإشعار ده هيظهرلك حتى لو الموبايل مقفول. عاش يا بطل 🚀",
+            icon: "icon-192.png",
+            badge: "icon-192.png",
+            vibrate: [200, 100, 200], // اهتزاز
+            tag: "test-notification" 
+        });
+    } else {
+        alert("لازم توافق على إذن الإشعارات عشان التجربة تنجح!");
+    }
+}
+
+
+// دالة لطلب الإذن وإرسال إشعار تجريبي فوراً
+async function testNotification() {
+    // 1. طلب إذن الإشعارات من المستخدم
+    const permission = await Notification.requestPermission();
+    
+    if (permission === "granted") {
+        // 2. الوصول للـ Service Worker لإرسال الإشعار من خلاله
+        const registration = await navigator.serviceWorker.ready;
+        
+        // 3. إرسال الإشعار
+        registration.showNotification("Calzy OS | تجربة بنجاح 🔥", {
+            body: "أنا شغال دلوقتي! الإشعار ده هيظهرلك حتى لو الموبايل مقفول. عاش يا بطل 🚀",
+            icon: "icon-192.png",
+            badge: "icon-192.png",
+            vibrate: [200, 100, 200], // اهتزاز
+            tag: "test-notification" 
+        });
+    } else {
+        alert("لازم توافق على إذن الإشعارات عشان التجربة تنجح!");
+    }
+}
+
+// تشغيل الدالة فور تحميل الصفحة للتجربة (أو اربطها بزرار)
+// testNotification(); 
+
+
+
+
 </script>
 </body>
 </html>
